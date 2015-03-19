@@ -1,9 +1,9 @@
 "use strict";
 let strava = require('strava-v3'),
     fitbit = require('fitbit-js'),
+    redis = require('redis'),
+    client = redis.createClient(),
     moment = require('moment'),
-    _ = require('underscore'),
-    today = moment(),
     oauth= {oauth_token:process.env.oauth_token, oauth_token_secret: process.env.oauth_secret};
 
 fitbit = fitbit(process.env.client_id, process.env.client_secret, "", "en_GB");
@@ -27,20 +27,23 @@ let syncWithFitbit = (stravaActivity) => {
 };
 
 strava.activities.get({id: ""}, (err, data) => {
-   _.forEach(data, (activity) => {
-       let date = moment(activity.start_date_local);
-
-       console.log();
-
-       if(moment(date).isSame(today, 'day')) {
-           strava.activities.get({id: activity.id}, (err, data) => {
-               console.log(data);
-               syncWithFitbit(data);
-           });
-
-       }
-
-   });
+    data.forEach((activity) => {
+        let date = moment(activity.start_date_local);
+        client.get(activity.id, (err, value) => {
+            if(value == null) {
+                client.set(activity.id, true);
+                strava.activities.get({id: activity.id}, (err, data) => {
+                    syncWithFitbit(data);
+                });
+            }
+        });
+    })
 });
+
+setTimeout(() => {
+    client.unref();
+}, 10000);
+
+
 
 
